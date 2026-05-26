@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zen German Mastery</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* School Aesthetic Custom Styles */
+    body {
+      font-family: "Nunito", sans-serif;
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border: 4px solid #ffffff;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    }
+
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+      border-bottom: 2px dashed #a78bfa;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: max-content;
+      max-width: 200px;
+      /* Обмеження ширини для мобільних */
+      white-space: normal;
+      background-color: #6d28d9;
+      color: #fff;
+      text-align: center;
+      border-radius: 10px;
+      padding: 6px 12px;
+      position: absolute;
+      z-index: 50;
+      bottom: 130%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-size: 0.9rem;
+      font-weight: 700;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .tooltip .tooltiptext::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: #6d28d9 transparent transparent transparent;
+    }
+
+    /* :focus для кращої роботи на тачскрінах */
+    .tooltip:active .tooltiptext,
+    .tooltip:focus .tooltiptext,
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .correct-anim {
+      animation: pulseGreen 0.5s;
+    }
+
+    .incorrect-anim {
+      animation: shakeRed 0.5s;
+    }
+
+    .pop-in {
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    @keyframes pulseGreen {
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.02);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes shakeRed {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      25% {
+        transform: translateX(-8px);
+      }
+
+      75% {
+        transform: translateX(8px);
+      }
+    }
+
+    @keyframes popIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(10px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body
+  class="h-screen flex flex-col md:flex-row overflow-hidden bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100">
+
+  <aside
+    class="w-full md:w-80 glass-panel flex flex-col p-4 md:p-6 z-10 m-2 md:m-4 rounded-3xl flex-shrink-0 max-h-[40vh] md:max-h-none overflow-y-auto md:overflow-visible shadow-md">
+    <h1
+      class="text-2xl md:text-3xl font-extrabold text-indigo-800 mb-4 md:mb-8 border-b-4 border-indigo-100 pb-2 md:pb-4 text-center">
+      🎒 Zen German
+    </h1>
+
+    <div class="mb-4 md:mb-6 bg-white p-3 md:p-4 rounded-2xl shadow-sm border-2 border-indigo-50">
+      <h2 class="text-xs md:text-sm font-bold text-indigo-400 uppercase tracking-wider mb-1 md:mb-2">
+        Твій прогрес
+      </h2>
+      <p class="text-indigo-900 font-semibold text-sm md:text-base">
+        Всього слів:
+        <span id="total-words-count" class="font-extrabold text-pink-500 text-lg">0</span>
+      </p>
+    </div>
+
+    <div
+      class="mb-4 md:mb-6 flex-grow bg-white p-3 md:p-4 rounded-2xl shadow-sm border-2 border-indigo-50 overflow-y-auto">
+      <h2 class="text-xs md:text-sm font-bold text-indigo-400 uppercase tracking-wider mb-2 md:mb-3">
+        🔥 Найважчі слова
+      </h2>
+      <ul id="hardest-words-list" class="space-y-2 md:space-y-3 text-sm text-indigo-900"></ul>
+    </div>
+
+    <button onclick="app.startSession()"
+      class="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold text-base md:text-lg py-3 md:py-4 rounded-2xl transition-all shadow-lg transform hover:scale-105 mt-auto">
+      🚀 Почати урок
+    </button>
+  </aside>
+
+  <main class="flex-1 overflow-y-auto p-4 md:p-10 relative">
+    <div id="view-dashboard" class="max-w-3xl mx-auto mt-4 md:mt-10 transition-opacity duration-300">
+      <h2 class="text-2xl md:text-4xl font-extrabold mb-4 md:mb-6 text-indigo-900">Додати слова</h2>
+      <p class="text-indigo-600 font-medium mb-4 text-base md:text-lg">
+        Вставте список німецьких слів (через кому або з нового рядка).
+      </p>
+      <textarea id="vocab-input" rows="5"
+        class="w-full p-4 md:p-5 rounded-2xl md:rounded-3xl border-2 md:border-4 border-white focus:border-purple-300 focus:ring-0 focus:outline-none mb-4 md:mb-6 shadow-md text-base md:text-lg font-medium text-indigo-900 bg-white/60"
+        placeholder="Наприклад: Haus, Hund, spazieren gehen..."></textarea>
+      <button onclick="app.addWords()"
+        class="w-full md:w-auto bg-pink-500 hover:bg-pink-600 text-white font-bold text-base md:text-lg px-6 py-3 md:px-8 md:py-3 rounded-2xl transition shadow-lg transform hover:scale-105">
+        ➕ Додати до словника
+      </button>
+      <div id="add-feedback"
+        class="mt-4 block md:inline-block md:ml-4 text-green-600 font-bold bg-green-100 px-4 py-2 rounded-xl hidden text-center">
+        Слова успішно додані! 🎉
+      </div>
+    </div>
+
+    <div id="view-loading" class="hidden h-full flex flex-col items-center justify-center text-indigo-600 min-h-[50vh]">
+      <div class="text-5xl md:text-6xl animate-bounce mb-4 md:mb-6">🤖</div>
+      <p class="text-lg md:text-2xl font-bold animate-pulse text-indigo-800 text-center px-4">
+        Штучний інтелект готує для тебе цікаві завдання...
+      </p>
+    </div>
+
+    <div id="view-quiz" class="hidden max-w-4xl mx-auto mt-4 md:mt-10 pb-10">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
+        <h2 class="text-xl md:text-2xl font-extrabold text-indigo-900 drop-shadow-sm">Поточний урок</h2>
+        <button onclick="app.stopSession()"
+          class="w-full md:w-auto bg-white hover:bg-red-50 text-red-500 border-2 border-red-200 hover:border-red-400 px-4 py-2 rounded-xl font-bold transition shadow-sm hover:-translate-y-1 text-sm md:text-base">
+          🛑 Перервати урок
+        </button>
+      </div>
+
+      <div
+        class="w-full bg-white/50 rounded-full h-3 md:h-4 mb-6 md:mb-8 border-2 border-white shadow-inner overflow-hidden">
+        <div id="progress-bar"
+          class="bg-gradient-to-r from-green-400 to-emerald-500 h-full rounded-full transition-all duration-500"
+          style="width: 0%"></div>
+      </div>
+
+      <div id="exercise-container"
+        class="glass-panel p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-xl min-h-[350px] md:min-h-[400px] flex flex-col justify-center items-center">
+      </div>
+
+      <div class="mt-6 md:mt-8 flex justify-end">
+        <button id="next-btn" onclick="app.nextExercise()"
+          class="hidden w-full md:w-auto bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold text-lg md:text-xl px-6 py-3 md:px-10 md:py-4 rounded-2xl transition shadow-lg transform hover:scale-105">
+          Наступна вправа ➡️
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const API_KEY = "AIzaSyD86_Bu3x4tANcAzCCYpB_1jzdqErUXviA";
+    const MODELS = [
+      // === НАЙШВИДШІ ТА НАЙЛЕГШІ (Пріоритет #1) ===
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash-lite-001",
+      "gemini-2.0-flash-lite",
+      "gemini-3.1-flash-lite-preview",
+
+      // === ЗБАЛАНСОВАНІ ТА ШВИДКІ (Пріоритет #2) ===
+      "gemini-flash-latest",
+      "gemini-3.5-flash",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash-001",
+      "gemini-2.0-flash",
+      "gemini-3-flash-preview",
+
+      // === ПОТУЖНІ ТА РОЗУМНІ (Пріоритет #3) ===
+      "gemini-pro-latest",
+      "gemini-3.1-pro-preview",
+      "gemini-3-pro-preview",
+      "gemini-2.5-pro",
+
+      // === ЕКСПЕРИМЕНТАЛЬНІ ТА СПЕЦІАЛІЗОВАНІ (Крайній резерв) ===
+      "gemma-4-26b-a4b-it",
+      "gemma-4-31b-it",
+      "deep-research-max-preview-04-2026",
+      "deep-research-pro-preview-12-2025",
+      "deep-research-preview-04-2026",
+      "lyria-3-pro-preview",
+      "lyria-3-clip-preview",
+      "gemini-3.1-pro-preview-customtools",
+      "gemini-robotics-er-1.6-preview",
+      "gemini-robotics-er-1.5-preview",
+      "gemini-2.5-computer-use-preview-10-2025",
+      "antigravity-preview-05-2026"
+    ];
+
+    const app = {
+      vocabDB: [],
+      currentSession: [],
+      currentIndex: 0,
+
+      init() {
+        this.loadDB();
+        this.updateDashboard();
+        this.loadSession();
+      },
+
+      loadDB() {
+        const stored = localStorage.getItem("zenGermanVocab");
+        if (stored) this.vocabDB = JSON.parse(stored);
+      },
+
+      loadSession() {
+        const savedSession = sessionStorage.getItem("zenGermanCurrentSession");
+        if (savedSession) {
+          try {
+            const data = JSON.parse(savedSession);
+            this.currentSession = data.exercises;
+            this.currentIndex = data.index;
+
+            if (this.currentIndex < this.currentSession.length) {
+              this.switchView("view-quiz");
+              this.renderExercise();
+            } else {
+              sessionStorage.removeItem("zenGermanCurrentSession");
+            }
+          } catch (e) {
+            console.error("Помилка читання сесії", e);
+            sessionStorage.removeItem("zenGermanCurrentSession");
+          }
+        }
+      },
+
+      saveSession() {
+        if (this.currentSession && this.currentSession.length > 0) {
+          const sessionData = {
+            exercises: this.currentSession,
+            index: this.currentIndex
+          };
+          sessionStorage.setItem("zenGermanCurrentSession", JSON.stringify(sessionData));
+        } else {
+          sessionStorage.removeItem("zenGermanCurrentSession");
+        }
+      },
+
+      stopSession() {
+        if (confirm("Ви впевнені, що хочете перервати урок? Поточний прогрес буде втрачено.")) {
+          this.currentSession = [];
+          this.currentIndex = 0;
+          sessionStorage.removeItem("zenGermanCurrentSession");
+          this.switchView("view-dashboard");
+          this.updateDashboard();
+        }
+      },
+
+      speakGerman(text) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'de-DE';
+          utterance.rate = 0.9;
+          window.speechSynthesis.speak(utterance);
+        } else {
+          console.warn("Ваш браузер не підтримує озвучку тексту.");
+        }
+      },
+
+      playCurrentSentence() {
+        const ex = this.currentSession[this.currentIndex];
+        const fullSentence = ex.sentence.replace("___", ex.answer);
+        this.speakGerman(fullSentence);
+      },
+
+      saveDB() {
+        localStorage.setItem("zenGermanVocab", JSON.stringify(this.vocabDB));
+        this.updateDashboard();
+      },
+
+      addWords() {
+        const input = document.getElementById("vocab-input").value;
+        if (!input.trim()) return;
+
+        const words = input.split(/[\n,]+/).map((w) => w.trim()).filter((w) => w);
+        let added = 0;
+
+        words.forEach((word) => {
+          if (!this.vocabDB.find((w) => w.word.toLowerCase() === word.toLowerCase())) {
+            this.vocabDB.push({
+              word: word,
+              correct_count: 0,
+              total_attempts: 0,
+              last_seen: null,
+              difficulty_score: 1.0,
+            });
+            added++;
+          }
+        });
+
+        if (added > 0) this.saveDB();
+        document.getElementById("vocab-input").value = "";
+
+        const feedback = document.getElementById("add-feedback");
+        feedback.classList.remove("hidden");
+        setTimeout(() => feedback.classList.add("hidden"), 3000);
+      },
+
+      updateDashboard() {
+        document.getElementById("total-words-count").innerText = this.vocabDB.length;
+
+        this.vocabDB.forEach((w) => {
+          if (w.total_attempts === 0) w.difficulty_score = 1.0;
+          else w.difficulty_score = 1 - w.correct_count / w.total_attempts;
+        });
+
+        const hardest = [...this.vocabDB]
+          .filter((w) => w.total_attempts > 0 || w.difficulty_score === 1.0)
+          .sort((a, b) => b.difficulty_score - a.difficulty_score)
+          .slice(0, 5);
+
+        const list = document.getElementById("hardest-words-list");
+        list.innerHTML = hardest.length === 0
+          ? '<li class="text-indigo-300 italic font-medium text-xs md:text-sm">Ще немає даних. Додай слова!</li>'
+          : hardest.map((w) => `
+                  <li class="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-2 md:p-3 rounded-xl">
+                      <span class="font-bold text-indigo-800 text-sm md:text-base max-w-[60%] truncate" title="${w.word}">${w.word}</span>
+                      <span class="text-[10px] md:text-xs font-bold bg-pink-100 text-pink-600 px-2 py-1 rounded-full shrink-0">${Math.round(w.difficulty_score * 100)}% складність</span>
+                  </li>
+              `).join("");
+      },
+
+      switchView(viewId) {
+        ["view-dashboard", "view-loading", "view-quiz"].forEach((id) => {
+          document.getElementById(id).classList.add("hidden");
+        });
+        document.getElementById(viewId).classList.remove("hidden");
+      },
+
+      async startSession() {
+        if (this.vocabDB.length < 5) {
+          alert("Будь ласка, додайте хоча б 5 слів до словника.");
+          return;
+        }
+
+        this.switchView("view-loading");
+
+        let sessionWords = [...this.vocabDB]
+          .sort((a, b) => b.difficulty_score - a.difficulty_score + (Math.random() * 0.2 - 0.1))
+          .slice(0, 10)
+          .map((w) => w.word);
+
+        const prompt = `
+          You are an expert German teacher for BEGINNER (A1-A2) students. Create an interactive JSON learning session based on these German vocabulary words: ${sessionWords.join(", ")}.
+          Generate exactly 10 exercises. EVERY exercise MUST be a sentence completion task.
+          
+          CRITICAL RULES:
+          1. CONJUGATION & GRAMMAR (CRITICAL): The correct 'answer' and the 3 incorrect 'options' MUST be properly conjugated/declined to perfectly fit the blank ("___") grammatically. DO NOT just output the base dictionary form. Example: If the target is "ansehen", the sentence could be "Ich möchte den Film ___" (answer: "ansehen") OR "Er ___ den Film an" (answer: "sieht").
+          2. CONTEXT IS KING: Provide enough simple context so that ONLY the correct target word makes logical sense. Use A1-A2 vocabulary.
+          3. DISTRACTORS: The 3 incorrect 'options' MUST have the exact same grammatical form (tense, gender, case) as the correct answer, so the user cannot guess based on grammar alone. They must be logically completely wrong.
+          4. The 'sentence' must be a pure German sentence with the conjugated target word replaced by "___".
+          5. Provide a 'wordMap' translating EVERY German word used in the sentence to Ukrainian.
+          6. Provide 'translation' which is the FULL translation of the completed German sentence into Ukrainian.
+          7. EXACT BASE WORD: The "word" property in your JSON MUST be EXACTLY the base dictionary string from the list I provided. This is used for database tracking.
+          8. Provide a 'genderMap' assigning "der", "die", "das", or "plural" to EVERY NOUN present in the 'sentence' (excluding the blank).
+          9. Return ONLY valid JSON. Do not include markdown formatting like \`\`\`json.
+          
+          Format:
+          {
+            "exercises": [
+              {
+                "word": "[Base Word from List]",
+                "sentence": "Ich ___ den Film.",
+                "translation": "Я дивлюся фільм.",
+                "options": ["sehe an", "[Wrong 1 Conjugated]", "[Wrong 2 Conjugated]", "[Wrong 3 Conjugated]"],
+                "answer": "sehe an",
+                "wordMap": {
+                  "Ich": "Я",
+                  "den": "цей",
+                  "Film": "фільм"
+                },
+                "genderMap": {
+                  "Film": "der"
+                }
+              }
+            ]
+          }
+        `;
+
+        let success = false;
+        let lastError = null;
+
+        // Перебираємо моделі по черзі
+        for (const model of MODELS) {
+          console.log(`Пробуємо згенерувати через модель: ${model}...`);
+          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`;
+
+          try {
+            const response = await fetch(apiUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+            });
+
+            const data = await response.json();
+
+            // Якщо помилка (наприклад, перевантаження 503), викидаємо її, щоб перейти до catch
+            if (!response.ok) {
+              throw new Error(data.error?.message || "Невідома помилка API");
+            }
+
+            if (!data.candidates || data.candidates.length === 0) {
+              throw new Error("API не повернуло жодних даних.");
+            }
+
+            let jsonStr = data.candidates[0].content.parts[0].text;
+            jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+
+            this.currentSession = JSON.parse(jsonStr).exercises;
+            this.currentIndex = 0;
+            this.saveSession();
+            this.renderExercise();
+            this.switchView("view-quiz");
+
+            success = true; // Завдання успішно згенеровані
+            break;          // Виходимо з циклу (інші моделі вже не пробуємо)
+
+          } catch (error) {
+            console.warn(`Модель ${model} не впоралась: ${error.message}. Переходимо до наступної...`);
+            lastError = error;
+            // Цикл автоматично піде на наступну ітерацію
+          }
+        }
+
+        // Якщо цикл закінчився, а успіху так і немає (всі моделі впали)
+        if (!success) {
+          console.error("Всі моделі перевантажені або недоступні. Остання помилка:", lastError);
+          alert("На жаль, всі сервери штучного інтелекту зараз перевантажені. Зачекайте хвилинку та спробуйте ще раз.");
+          this.switchView("view-dashboard");
+        }
+      },
+
+      renderExercise() {
+        document.getElementById("next-btn").classList.add("hidden");
+        const progress = (this.currentIndex / this.currentSession.length) * 100;
+        document.getElementById("progress-bar").style.width = `${progress}%`;
+
+        const container = document.getElementById("exercise-container");
+        // Адаптивні класи для контейнера
+        container.className = "glass-panel p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-xl min-h-[350px] md:min-h-[400px] flex flex-col justify-center items-center w-full relative";
+
+        const ex = this.currentSession[this.currentIndex];
+
+        const words = ex.sentence.split(" ");
+        const sentenceHtml = words.map((w) => {
+          const cleanWord = w.replace(/[.,!?]/g, "");
+          const trans = ex.wordMap ? ex.wordMap[cleanWord] || "Немає перекладу" : "Немає перекладу";
+          const gender = ex.genderMap ? ex.genderMap[cleanWord] : null;
+
+          // Визначаємо колір слова на основі його роду (die - червоний, der - синій, das - зелений)
+          let colorClass = "text-indigo-900 hover:text-purple-700";
+          if (gender === "die") colorClass = "text-red-600 hover:text-red-400";
+          else if (gender === "der") colorClass = "text-blue-600 hover:text-blue-400";
+          else if (gender === "das") colorClass = "text-green-600 hover:text-green-400";
+          else if (gender === "plural") colorClass = "text-orange-500 hover:text-orange-400";
+
+          if (w.includes("___")) {
+            return `<span class="font-extrabold text-purple-600 border-b-2 md:border-b-4 border-purple-400 px-4 md:px-8 mx-1 md:mx-2 inline-block min-w-[60px] md:min-w-[100px]"></span>`;
+          }
+
+          // Додаємо згенерований colorClass до span-елемента
+          return `<span class="tooltip mx-1 transition-colors ${colorClass}" tabindex="0">${w}<span class="tooltiptext">${trans}</span></span>`;
+        }).join("");
+
+        // Адаптивний розмір тексту та кнопок
+        const html = `
+          <p class="text-2xl md:text-4xl font-extrabold mb-3 text-center leading-normal text-indigo-900 drop-shadow-sm">${sentenceHtml}</p>
+          
+          <p class="text-base md:text-lg font-bold text-indigo-500 text-center mb-8 md:mb-12 px-4">🇺🇦 ${ex.translation}</p>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 w-full max-w-2xl mb-4 md:mb-6">
+            ${ex.options.sort(() => Math.random() - 0.5).map((opt) => `
+              <button onclick="app.checkAnswer(this, '${opt}', '${ex.answer}', '${ex.word}')" 
+                class="bg-white border-2 md:border-4 border-indigo-100 hover:border-purple-400 hover:bg-purple-50 hover:-translate-y-1 p-3 md:p-5 rounded-xl md:rounded-2xl text-indigo-800 text-lg md:text-2xl font-bold transition-all shadow-md"
+              >
+                ${opt}
+              </button>
+            `).join("")}
+          </div>
+
+          <div id="translation-box" class="hidden w-full max-w-2xl mt-2 md:mt-4 bg-yellow-50 border-2 md:border-4 border-yellow-300 rounded-xl md:rounded-2xl p-4 md:p-5 text-center shadow-sm">
+            <p class="text-sm md:text-base text-yellow-800 font-bold mb-3">Словникове слово: <span class="text-purple-600 font-extrabold uppercase">${ex.word}</span></p>
+            
+            <button onclick="app.playCurrentSentence()" class="inline-flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 md:px-6 md:py-2 rounded-xl font-bold transition shadow-sm hover:scale-105 text-sm md:text-base w-full md:w-auto">
+              🔊 Прослухати речення
+            </button>
+          </div>
+        `;
+
+        container.innerHTML = html;
+      },
+
+      checkAnswer(btn, selected, correct, targetWord) {
+        const buttons = btn.parentElement.querySelectorAll("button");
+        buttons.forEach((b) => {
+          b.disabled = true;
+          b.classList.remove("hover:-translate-y-1", "hover:border-purple-400", "hover:bg-purple-50");
+        });
+
+        const isCorrect = selected === correct;
+
+        const cleanTarget = targetWord.toLowerCase().trim();
+        let dbWord = this.vocabDB.find((w) => w.word.toLowerCase().trim() === cleanTarget);
+
+        if (!dbWord) {
+          dbWord = this.vocabDB.find((w) =>
+            cleanTarget.includes(w.word.toLowerCase().trim()) ||
+            w.word.toLowerCase().trim().includes(cleanTarget)
+          );
+        }
+
+        if (dbWord) {
+          dbWord.total_attempts++;
+          if (isCorrect) dbWord.correct_count++;
+          dbWord.last_seen = new Date().toISOString();
+          this.saveDB();
+        } else {
+          console.warn("Слово не знайдено для оновлення статистики:", targetWord);
+        }
+
+        const container = document.getElementById("exercise-container");
+
+        if (isCorrect) {
+          btn.classList.add("bg-green-400", "text-white", "border-green-500", "shadow-lg");
+          btn.classList.remove("bg-white", "text-indigo-800", "border-indigo-100");
+          container.classList.add("correct-anim");
+        } else {
+          btn.classList.add("bg-red-400", "text-white", "border-red-500");
+          btn.classList.remove("bg-white", "text-indigo-800", "border-indigo-100");
+          container.classList.add("incorrect-anim");
+
+          buttons.forEach((b) => {
+            if (b.innerText === correct) {
+              b.classList.add("border-4", "border-green-400", "text-green-600", "bg-green-50");
+            }
+          });
+        }
+
+        const translationBox = document.getElementById("translation-box");
+        translationBox.classList.remove("hidden");
+        translationBox.classList.add("pop-in");
+
+        setTimeout(() => {
+          container.classList.remove("correct-anim", "incorrect-anim");
+          document.getElementById("next-btn").classList.remove("hidden");
+          document.getElementById("next-btn").classList.add("pop-in");
+        }, 500);
+      },
+
+      nextExercise() {
+        this.currentIndex++;
+        this.saveSession();
+
+        if (this.currentIndex >= this.currentSession.length) {
+          sessionStorage.removeItem("zenGermanCurrentSession");
+
+          document.getElementById("progress-bar").style.width = "100%";
+          document.getElementById("exercise-container").innerHTML = `
+                <div class="text-center pop-in p-4">
+                    <div class="text-5xl md:text-7xl mb-4 md:mb-6">🏆</div>
+                    <h2 class="text-2xl md:text-4xl font-extrabold text-indigo-900 mb-3 md:mb-4">Gut gemacht!</h2>
+                    <p class="text-indigo-600 font-bold text-base md:text-xl mb-6 md:mb-8">Ви чудово попрацювали над своїм словниковим запасом.</p>
+                    <button onclick="app.switchView('view-dashboard')" class="w-full md:w-auto bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold text-lg md:text-xl px-6 py-3 md:px-10 md:py-4 rounded-2xl transition shadow-lg transform hover:scale-105">
+                        Повернутися на головну 🏠
+                    </button>
+                </div>
+            `;
+          document.getElementById("next-btn").classList.add("hidden");
+        } else {
+          this.renderExercise();
+        }
+      },
+    };
+
+    window.onload = () => app.init();
+  </script>
+</body>
+
+</html>
