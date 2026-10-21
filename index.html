@@ -10,9 +10,13 @@
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎒</text></svg>">
   <style>
-    /* School Aesthetic Custom Styles */
     body {
       font-family: "Nunito", sans-serif;
+      min-height: 100dvh;
+    }
+
+    .reading-blank {
+      max-width: min(100%, 14rem);
     }
 
     .glass-panel {
@@ -104,9 +108,9 @@
   </style>
 </head>
 
-<body class="h-screen flex flex-col md:flex-row overflow-hidden bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100">
+<body class="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 md:h-screen md:overflow-hidden">
 
-  <aside class="w-full md:w-80 glass-panel flex flex-col p-4 md:p-6 z-10 m-2 md:m-4 rounded-3xl flex-shrink-0 max-h-[40vh] md:max-h-none overflow-y-auto md:overflow-visible shadow-md">
+  <aside class="w-full md:w-80 glass-panel flex flex-col p-4 md:p-6 z-10 m-2 md:m-4 rounded-3xl flex-shrink-0 md:max-h-none overflow-visible md:overflow-y-auto shadow-md">
     <h1 class="text-2xl md:text-3xl font-extrabold text-indigo-800 mb-4 md:mb-8 border-b-4 border-indigo-100 pb-2 md:pb-4 text-center">
       🎒 Zen German
     </h1>
@@ -116,6 +120,9 @@
       <p class="text-indigo-900 font-semibold text-sm md:text-base">
         Всього слів: <span id="total-words-count" class="font-extrabold text-pink-500 text-lg">0</span>
       </p>
+      <p class="text-indigo-900 font-semibold text-sm md:text-base mt-1">
+        Ще не перевірено: <span id="unseen-words-count" class="font-extrabold text-purple-500">0</span>
+      </p>
     </div>
 
     <div class="mb-4 md:mb-6 flex-grow bg-white p-3 md:p-4 rounded-2xl shadow-sm border-2 border-indigo-50 overflow-y-auto">
@@ -123,12 +130,15 @@
       <ul id="hardest-words-list" class="space-y-2 md:space-y-3 text-sm text-indigo-900"></ul>
     </div>
 
-    <button onclick="app.startSession()" class="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold text-base md:text-lg py-3 md:py-4 rounded-2xl transition-all shadow-lg transform hover:scale-105 mt-auto">
-      🚀 Почати урок
+    <button onclick="app.startSession()" class="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold text-base md:text-lg py-3 md:py-4 rounded-2xl transition-all shadow-lg transform hover:scale-105 mt-4">
+      🚀 Тест із 4 варіантами
+    </button>
+    <button onclick="app.startReadingSession()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-base md:text-lg py-3 md:py-4 rounded-2xl transition-all shadow-lg transform hover:scale-105 mt-3">
+      📖 Текст із пропусками
     </button>
   </aside>
 
-  <main class="flex-1 overflow-y-auto p-4 md:p-10 relative">
+  <main class="flex-1 min-h-0 overflow-visible md:overflow-y-auto p-4 md:p-10 relative">
     <div id="view-dashboard" class="max-w-3xl mx-auto mt-4 md:mt-10 transition-opacity duration-300">
       
       <div class="mb-8 bg-white/80 p-5 rounded-2xl shadow-sm border-2 border-indigo-100">
@@ -197,11 +207,10 @@
       init() {
         this.loadDB();
         this.updateDashboard();
-        this.initApiKeyUI(); // Завантажуємо ключ в інпут при старті
+        this.initApiKeyUI();
         this.loadSession();
       },
 
-      // --- МЕТОДИ РОБОТИ З API КЛЮЧЕМ ---
       getApiKey() {
         return localStorage.getItem("zenGermanApiKey");
       },
@@ -238,11 +247,51 @@
           document.getElementById("api-key-input").value = savedKey;
         }
       },
-      // ----------------------------------
 
       loadDB() {
         const stored = localStorage.getItem("zenGermanVocab");
-        if (stored) this.vocabDB = JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          this.vocabDB = Array.isArray(parsed) ? parsed.map((w) => ({
+            ...w,
+            total_attempts: Number(w.total_attempts) || 0,
+            correct_count: Number(w.correct_count) || 0,
+            difficulty_score: Number(w.difficulty_score) || 0
+          })) : [];
+        }
+      },
+
+      normalizeWord(word) {
+        return String(word || "").trim().toLocaleLowerCase("de-DE");
+      },
+
+      selectTargetWords(limit) {
+        return [...this.vocabDB].sort((a, b) => {
+          const aa = Number(a.total_attempts) || 0;
+          const ba = Number(b.total_attempts) || 0;
+          if ((aa === 0) !== (ba === 0)) return aa === 0 ? -1 : 1;
+          const ad = aa ? 1 - (Number(a.correct_count) || 0) / aa : 0;
+          const bd = ba ? 1 - (Number(b.correct_count) || 0) / ba : 0;
+          if (bd !== ad) return bd - ad;
+          if (aa !== ba) return aa - ba;
+          return Math.random() - 0.5;
+        }).slice(0, limit).map((w) => w.word);
+      },
+
+      escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+        }[char]));
+      },
+
+      recordAttempt(targetWord, isCorrect, persist = true) {
+        const dbWord = this.vocabDB.find((w) => this.normalizeWord(w.word) === this.normalizeWord(targetWord));
+        if (!dbWord) return;
+        dbWord.total_attempts = (Number(dbWord.total_attempts) || 0) + 1;
+        dbWord.correct_count = (Number(dbWord.correct_count) || 0) + (isCorrect ? 1 : 0);
+        dbWord.last_seen = new Date().toISOString();
+        dbWord.difficulty_score = 1 - dbWord.correct_count / dbWord.total_attempts;
+        if (persist) this.saveDB();
       },
 
       loadSession() {
@@ -302,6 +351,7 @@
 
       playCurrentSentence() {
         const ex = this.currentSession[this.currentIndex];
+        if (!ex || ex.type === "reading") return;
         const fullSentence = ex.sentence.replace("___", ex.answer);
         this.speakGerman(fullSentence);
       },
@@ -341,33 +391,33 @@
 
       updateDashboard() {
         document.getElementById("total-words-count").innerText = this.vocabDB.length;
-
+        document.getElementById("unseen-words-count").innerText = this.vocabDB.filter((w) => !(Number(w.total_attempts) > 0)).length;
         this.vocabDB.forEach((w) => {
-          if (w.total_attempts === 0) w.difficulty_score = 1.0;
-          else w.difficulty_score = 1 - w.correct_count / w.total_attempts;
+          const attempts = Number(w.total_attempts) || 0;
+          const correct = Number(w.correct_count) || 0;
+          w.difficulty_score = attempts > 0 ? 1 - correct / attempts : 0;
         });
-
         const hardest = [...this.vocabDB]
-          .filter((w) => w.total_attempts > 0 || w.difficulty_score === 1.0)
-          .sort((a, b) => b.difficulty_score - a.difficulty_score)
+          .filter((w) => Number(w.total_attempts) > 0)
+          .sort((a, b) => b.difficulty_score - a.difficulty_score || ((Number(b.total_attempts) || 0) - (Number(b.correct_count) || 0)) - ((Number(a.total_attempts) || 0) - (Number(a.correct_count) || 0)))
           .slice(0, 5);
-
         const list = document.getElementById("hardest-words-list");
         list.innerHTML = hardest.length === 0
-          ? '<li class="text-indigo-300 italic font-medium text-xs md:text-sm">Ще немає даних. Додай слова!</li>'
-          : hardest.map((w) => `
-                  <li class="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-2 md:p-3 rounded-xl">
-                      <span class="font-bold text-indigo-800 text-sm md:text-base max-w-[60%] truncate" title="${w.word}">${w.word}</span>
-                      <span class="text-[10px] md:text-xs font-bold bg-pink-100 text-pink-600 px-2 py-1 rounded-full shrink-0">${Math.round(w.difficulty_score * 100)}% складність</span>
-                  </li>
-              `).join("");
+          ? '<li class="text-indigo-300 italic font-medium text-xs md:text-sm">Після перших відповідей тут з’являться слова, у яких найчастіше трапляються помилки.</li>'
+          : hardest.map((w) => {
+              const attempts = Number(w.total_attempts) || 0;
+              const errors = attempts - (Number(w.correct_count) || 0);
+              return `<li class="flex justify-between items-center gap-2 bg-indigo-50 border border-indigo-100 p-2 md:p-3 rounded-xl"><span class="font-bold text-indigo-800 text-sm md:text-base min-w-0 truncate" title="${this.escapeHtml(w.word)}">${this.escapeHtml(w.word)}</span><span class="text-[10px] md:text-xs font-bold bg-pink-100 text-pink-600 px-2 py-1 rounded-full shrink-0">${errors}/${attempts} помилок · ${Math.round(w.difficulty_score * 100)}%</span></li>`;
+            }).join("");
       },
 
       switchView(viewId) {
         ["view-dashboard", "view-loading", "view-quiz"].forEach((id) => {
           document.getElementById(id).classList.add("hidden");
         });
-        document.getElementById(viewId).classList.remove("hidden");
+        const view = document.getElementById(viewId);
+        view.classList.remove("hidden");
+        if (window.matchMedia("(max-width: 767px)").matches) view.scrollIntoView({ behavior: "smooth", block: "start" });
       },
 
       async getAvailableModels() {
@@ -418,14 +468,11 @@
 
         this.switchView("view-loading");
 
-        let sessionWords = [...this.vocabDB]
-          .sort((a, b) => b.difficulty_score - a.difficulty_score + (Math.random() * 0.2 - 0.1))
-          .slice(0, 10)
-          .map((w) => w.word);
+        const sessionWords = this.selectTargetWords(10);
 
         const prompt = `
           You are an expert German teacher for BEGINNER (A1-A2) students. Create an interactive JSON learning session based on these German vocabulary words: ${sessionWords.join(", ")}.
-          Generate exactly 10 exercises. EVERY exercise MUST be a sentence completion task.
+          Generate exactly 10 exercises. EVERY exercise MUST be a sentence completion task. Each exercise's "word" must be copied exactly from the supplied base-word list. If the list has at least 10 words, use every base word exactly once; if it has fewer, reuse only words from the list. Never invent a target word.
           
           CRITICAL RULES:
           1. CONJUGATION & GRAMMAR (CRITICAL): The correct 'answer' and the 3 incorrect 'options' MUST be properly conjugated/declined to perfectly fit the blank ("___") grammatically. DO NOT just output the base dictionary form. Example: If the target is "ansehen", the sentence could be "Ich möchte den Film ___" (answer: "ansehen") OR "Er ___ den Film an" (answer: "sieht").
@@ -489,7 +536,11 @@
                 let jsonStr = data.candidates[0].content.parts[0].text;
                 jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
 
-                this.currentSession = JSON.parse(jsonStr).exercises;
+                const parsedSession = JSON.parse(jsonStr);
+                if (!Array.isArray(parsedSession.exercises) || parsedSession.exercises.length !== 10) throw new Error("API повернуло некоректну кількість вправ.");
+                const targetSet = new Set(sessionWords.map((word) => this.normalizeWord(word)));
+                if (parsedSession.exercises.some((exercise) => !targetSet.has(this.normalizeWord(exercise.word)))) throw new Error("API повернуло слово, якого немає в обраній добірці.");
+                this.currentSession = parsedSession.exercises;
                 this.currentIndex = 0;
                 this.saveSession();
                 this.renderExercise();
@@ -511,8 +562,178 @@
         }
       },
 
+      async requestGeminiJson(prompt) {
+        const models = await this.getAvailableModels().catch(() => ["gemini-2.5-flash", "gemini-2.0-flash"]);
+        let lastError = null;
+        for (const model of models) {
+          try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.getApiKey()}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error?.message || "Помилка запиту до Gemini API");
+            const raw = data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("");
+            if (!raw) throw new Error("API не повернуло текст відповіді.");
+            const cleaned = raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+            const firstBrace = cleaned.indexOf("{");
+            const lastBrace = cleaned.lastIndexOf("}");
+            if (firstBrace < 0 || lastBrace < firstBrace) throw new Error("API повернуло не JSON.");
+            return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Не вдалося створити текст.");
+      },
+
+      async startReadingSession() {
+        if (!this.getApiKey()) {
+          alert("⚠️ Спочатку додайте й збережіть Gemini API ключ у налаштуваннях.");
+          return;
+        }
+        if (this.vocabDB.length < 5) {
+          alert("Додайте щонайменше 5 слів до словника, щоб згенерувати текст із пропусками.");
+          return;
+        }
+        const blankCount = Math.min(this.vocabDB.length, 5 + Math.floor(Math.random() * 6));
+        const targetWords = this.selectTargetWords(blankCount);
+        this.switchView("view-loading");
+        const prompt = `
+You are an expert German teacher. Create one coherent German reading passage for a learner at A2 level. Use simple, natural German. The passage should be around 180–230 words, have a clear title and 2–4 paragraphs, and read as a natural story.
+
+The exact German vocabulary base forms to practise are: ${JSON.stringify(targetWords)}.
+Create exactly ${blankCount} blanks. Each blank must represent one different base word from this list, so every supplied target word is used exactly once. The answer may be grammatically inflected, but its "word" field must be the exact base form copied from the list. All correct answer forms must be different.
+
+Replace each answer position in the German text with placeholders {{1}}, {{2}}, ... {{${blankCount}}}. Each placeholder must appear exactly once. Include a complete Ukrainian translation of the finished German passage in "translation". Return only valid JSON, with no markdown, in this shape:
+{
+  "type": "reading",
+  "title": "...",
+  "text": "German passage with {{1}} placeholders",
+  "translation": "Complete Ukrainian translation with all answers filled in",
+  "blanks": [
+    {"id": 1, "word": "exact base form from target list", "answer": "correct form to put in text", "translation": "Ukrainian meaning"}
+  ]
+}
+Do not include an options field. The interface will show the same dropdown word bank in every blank, containing all correct missing word forms from this passage. Do not repeat a target word, do not make answer forms identical, and ensure each answer is compatible with the sentence grammar and meaning.
+`;
+        try {
+          const result = await this.requestGeminiJson(prompt);
+          if (!result || typeof result.text !== "string" || !Array.isArray(result.blanks) || result.blanks.length !== blankCount) {
+            throw new Error("API повернуло текст із некоректною кількістю пропусків.");
+          }
+          const seenTargets = new Set();
+          const blanks = result.blanks.map((blank, index) => ({
+            ...blank,
+            id: Number(blank.id) || index + 1,
+            word: String(blank.word || "").trim(),
+            answer: String(blank.answer || "").trim()
+          }));
+          const placeholderMatches = result.text.match(/\{\{\d+\}\}/g) || [];
+          if (placeholderMatches.length !== blankCount) throw new Error("У тексті кількість маркерів пропусків не збігається з кількістю відповідей.");
+          const seenIds = new Set();
+          for (const blank of blanks) {
+            if (!Number.isInteger(blank.id) || blank.id < 1 || blank.id > blankCount || seenIds.has(blank.id)) {
+              throw new Error("API повернуло повторювані або некоректні номери пропусків.");
+            }
+            seenIds.add(blank.id);
+            if (!blank.answer || !targetWords.some((word) => this.normalizeWord(word) === this.normalizeWord(blank.word))) {
+              throw new Error("API повернуло пропуск без правильного слова зі словника.");
+            }
+            if (seenTargets.has(this.normalizeWord(blank.word))) throw new Error("API використало слово для кількох пропусків.");
+            seenTargets.add(this.normalizeWord(blank.word));
+            if (result.text.split(`{{${blank.id}}}`).length !== 2) throw new Error(`У тексті некоректно вказано пропуск ${blank.id}.`);
+          }
+          if (new Set(blanks.map((blank) => this.normalizeWord(blank.answer))).size !== blanks.length) {
+            throw new Error("API повернуло повторювані слова для різних пропусків.");
+          }
+          this.currentSession = [{
+            type: "reading",
+            title: String(result.title || "Текст із пропусками"),
+            text: result.text,
+            translation: String(result.translation || ""),
+            blanks
+          }];
+          this.currentIndex = 0;
+          this.saveSession();
+          this.renderExercise();
+          this.switchView("view-quiz");
+        } catch (error) {
+          console.error("Помилка створення тексту:", error);
+          alert(`Не вдалося створити текст: ${error.message}`);
+          this.switchView("view-dashboard");
+        }
+      },
+
+      renderReadingExercise(ex) {
+        const container = document.getElementById("exercise-container");
+        container.className = "glass-panel p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-xl w-full relative flex flex-col items-stretch";
+        const options = [...new Set(ex.blanks.map((blank) => String(blank.answer)))].sort(() => Math.random() - 0.5);
+        const textHtml = this.escapeHtml(ex.text).replace(/\{\{(\d+)\}\}/g, (_, id) => {
+          const blank = ex.blanks.find((item) => Number(item.id) === Number(id));
+          if (!blank) return "________";
+          const selectOptions = options.map((option) => `<option value="${this.escapeHtml(option)}">${this.escapeHtml(option)}</option>`).join("");
+          return `<select data-blank-id="${Number(id)}" aria-label="Пропуск ${Number(id)}" class="reading-blank inline-block align-baseline max-w-full my-1 mx-1 px-2 py-1 rounded-xl border-2 border-purple-300 bg-white text-indigo-800 font-extrabold text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-purple-300"><option value="">— вибрати слово —</option>${selectOptions}</select>`;
+        });
+        container.innerHTML = `
+          <h3 class="text-2xl md:text-3xl font-extrabold text-indigo-900 mb-3">📖 ${this.escapeHtml(ex.title)}</h3>
+          <p class="text-sm md:text-base text-indigo-500 font-bold mb-5">Обери відповідне слово в кожному пропуску. У списках є слова, які потрібні для всього тексту.</p>
+          <div class="text-base md:text-xl leading-8 md:leading-9 text-indigo-950 whitespace-pre-line text-left">${textHtml}</div>
+          <div id="reading-feedback" class="hidden mt-6 p-4 rounded-2xl font-bold text-indigo-900 bg-indigo-50 border-2 border-indigo-100"></div>
+          <div id="translation-box" class="hidden w-full mt-5 bg-yellow-50 border-2 md:border-4 border-yellow-300 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm">
+            <h4 class="text-base md:text-lg text-yellow-900 font-extrabold mb-2">Український переклад</h4>
+            <p class="text-sm md:text-base text-yellow-900 whitespace-pre-line">${this.escapeHtml(ex.translation)}</p>
+            <button onclick="app.playCurrentReading()" class="inline-flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 mt-4 rounded-xl font-bold transition text-sm md:text-base w-full md:w-auto">🔊 Прослухати німецький текст</button>
+          </div>
+          <button id="check-reading-btn" onclick="app.checkReadingAnswers()" class="mt-6 w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-lg px-6 py-4 rounded-2xl shadow-lg transition">Перевірити відповіді ✓</button>
+        `;
+      },
+
+      checkReadingAnswers() {
+        const ex = this.currentSession[this.currentIndex];
+        if (!ex || ex.type !== "reading") return;
+        const selects = [...document.querySelectorAll("#exercise-container [data-blank-id]")];
+        if (selects.some((select) => !select.value)) {
+          alert("Заповни, будь ласка, усі пропуски перед перевіркою.");
+          return;
+        }
+        let correctCount = 0;
+        const lines = [];
+        ex.blanks.forEach((blank) => {
+          const select = selects.find((item) => Number(item.dataset.blankId) === Number(blank.id));
+          const isCorrect = Boolean(select && select.value === blank.answer);
+          if (isCorrect) correctCount++;
+          this.recordAttempt(blank.word, isCorrect, false);
+          select.disabled = true;
+          select.classList.remove("border-purple-300");
+          select.classList.add(isCorrect ? "border-green-500" : "border-red-500", isCorrect ? "bg-green-50" : "bg-red-50");
+          lines.push(`<li>${isCorrect ? "✅" : "❌"} Пропуск ${Number(blank.id)}${isCorrect ? "" : `: правильна відповідь — <strong>${this.escapeHtml(blank.answer)}</strong>`}</li>`);
+        });
+        this.saveDB();
+        const feedback = document.getElementById("reading-feedback");
+        feedback.classList.remove("hidden");
+        feedback.innerHTML = `<p class="text-lg mb-2">Результат: ${correctCount} із ${ex.blanks.length} правильних</p><ul class="space-y-1 text-sm md:text-base">${lines.join("")}</ul>`;
+        document.getElementById("translation-box").classList.remove("hidden");
+        document.getElementById("check-reading-btn").classList.add("hidden");
+        document.getElementById("next-btn").innerText = "Завершити текст 🏁";
+        document.getElementById("next-btn").classList.remove("hidden");
+        document.getElementById("next-btn").classList.add("pop-in");
+      },
+
+      playCurrentReading() {
+        const ex = this.currentSession[this.currentIndex];
+        if (!ex || ex.type !== "reading") return;
+        const completedText = ex.text.replace(/\{\{(\d+)\}\}/g, (_, id) => {
+          const blank = ex.blanks.find((item) => Number(item.id) === Number(id));
+          return blank ? blank.answer : "";
+        }).replace(/\s+/g, " ");
+        this.speakGerman(completedText);
+      },
+
       renderExercise() {
         document.getElementById("next-btn").classList.add("hidden");
+        document.getElementById("next-btn").innerText = "Наступна вправа ➡️";
         const progress = (this.currentIndex / this.currentSession.length) * 100;
         document.getElementById("progress-bar").style.width = `${progress}%`;
 
@@ -520,6 +741,10 @@
         container.className = "glass-panel p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-xl min-h-[350px] md:min-h-[400px] flex flex-col justify-center items-center w-full relative";
 
         const ex = this.currentSession[this.currentIndex];
+        if (ex.type === "reading") {
+          this.renderReadingExercise(ex);
+          return;
+        }
 
         const words = ex.sentence.split(" ");
         const sentenceHtml = words.map((w) => {
@@ -576,22 +801,7 @@
 
         const isCorrect = selected === correct;
 
-        const cleanTarget = targetWord.toLowerCase().trim();
-        let dbWord = this.vocabDB.find((w) => w.word.toLowerCase().trim() === cleanTarget);
-
-        if (!dbWord) {
-          dbWord = this.vocabDB.find((w) =>
-            cleanTarget.includes(w.word.toLowerCase().trim()) ||
-            w.word.toLowerCase().trim().includes(cleanTarget)
-          );
-        }
-
-        if (dbWord) {
-          dbWord.total_attempts++;
-          if (isCorrect) dbWord.correct_count++;
-          dbWord.last_seen = new Date().toISOString();
-          this.saveDB();
-        }
+        this.recordAttempt(targetWord, isCorrect);
 
         const container = document.getElementById("exercise-container");
 
