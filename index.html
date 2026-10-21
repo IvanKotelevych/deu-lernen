@@ -110,7 +110,7 @@
 
 <body class="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 md:h-screen md:overflow-hidden">
 
-  <aside class="w-full md:w-80 glass-panel flex flex-col p-4 md:p-6 z-10 m-2 md:m-4 rounded-3xl flex-shrink-0 md:max-h-none overflow-visible md:overflow-y-auto shadow-md">
+  <aside id="sidebar-panel" class="w-full md:w-80 glass-panel flex flex-col p-4 md:p-6 z-10 m-2 md:m-4 rounded-3xl flex-shrink-0 md:max-h-none overflow-visible md:overflow-y-auto shadow-md">
     <h1 class="text-2xl md:text-3xl font-extrabold text-indigo-800 mb-4 md:mb-8 border-b-4 border-indigo-100 pb-2 md:pb-4 text-center">
       🎒 Zen German
     </h1>
@@ -284,6 +284,28 @@
         }[char]));
       },
 
+      normalizeExerciseOptions(exercise) {
+        const answer = String(exercise.answer || "").trim();
+        if (!answer) throw new Error("Одна з вправ не має правильної відповіді.");
+        const provided = Array.isArray(exercise.options) ? exercise.options.map((option) => String(option || "").trim()).filter(Boolean) : [];
+        const unique = [];
+        const seen = new Set();
+        for (const option of provided) {
+          const key = this.normalizeWord(option);
+          if (key && key !== this.normalizeWord(answer) && !seen.has(key)) {
+            seen.add(key);
+            unique.push(option);
+          }
+        }
+        if (unique.length < 3) throw new Error("Одна з вправ має менше трьох різних неправильних варіантів. Спробуй згенерувати тест ще раз.");
+        const options = [answer, ...unique.slice(0, 3)];
+        for (let i = options.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [options[i], options[j]] = [options[j], options[i]];
+        }
+        return { ...exercise, answer, options };
+      },
+
       recordAttempt(targetWord, isCorrect, persist = true) {
         const dbWord = this.vocabDB.find((w) => this.normalizeWord(w.word) === this.normalizeWord(targetWord));
         if (!dbWord) return;
@@ -299,7 +321,7 @@
         if (savedSession) {
           try {
             const data = JSON.parse(savedSession);
-            this.currentSession = data.exercises;
+            this.currentSession = data.exercises.map((exercise) => exercise.type === "reading" ? exercise : this.normalizeExerciseOptions(exercise));
             this.currentIndex = data.index;
 
             if (this.currentIndex < this.currentSession.length) {
@@ -416,8 +438,13 @@
           document.getElementById(id).classList.add("hidden");
         });
         const view = document.getElementById(viewId);
+        const sidebar = document.getElementById("sidebar-panel");
         view.classList.remove("hidden");
-        if (window.matchMedia("(max-width: 767px)").matches) view.scrollIntoView({ behavior: "smooth", block: "start" });
+        sidebar.classList.toggle("hidden", viewId !== "view-dashboard");
+        if (window.matchMedia("(max-width: 767px)").matches) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          view.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       },
 
       async getAvailableModels() {
@@ -477,7 +504,7 @@
           CRITICAL RULES:
           1. CONJUGATION & GRAMMAR (CRITICAL): The correct 'answer' and the 3 incorrect 'options' MUST be properly conjugated/declined to perfectly fit the blank ("___") grammatically. DO NOT just output the base dictionary form. Example: If the target is "ansehen", the sentence could be "Ich möchte den Film ___" (answer: "ansehen") OR "Er ___ den Film an" (answer: "sieht").
           2. CONTEXT IS KING: Provide enough simple context so that ONLY the correct target word makes logical sense. Use A1-A2 vocabulary.
-          3. DISTRACTORS: The 3 incorrect 'options' MUST have the exact same grammatical form (tense, gender, case) as the correct answer, so the user cannot guess based on grammar alone. They must be logically completely wrong.
+          3. DISTRACTORS: Return exactly three distinct incorrect options, all in the same grammatical form as the answer. The options array must contain exactly four distinct values including the correct answer. The correct answer MUST appear in options exactly once.
           4. The 'sentence' must be a pure German sentence with the conjugated target word replaced by "___".
           5. Provide a 'wordMap' translating EVERY German word used in the sentence to Ukrainian.
           6. Provide 'translation' which is the FULL translation of the completed German sentence into Ukrainian.
@@ -540,7 +567,7 @@
                 if (!Array.isArray(parsedSession.exercises) || parsedSession.exercises.length !== 10) throw new Error("API повернуло некоректну кількість вправ.");
                 const targetSet = new Set(sessionWords.map((word) => this.normalizeWord(word)));
                 if (parsedSession.exercises.some((exercise) => !targetSet.has(this.normalizeWord(exercise.word)))) throw new Error("API повернуло слово, якого немає в обраній добірці.");
-                this.currentSession = parsedSession.exercises;
+                this.currentSession = parsedSession.exercises.map((exercise) => this.normalizeExerciseOptions(exercise));
                 this.currentIndex = 0;
                 this.saveSession();
                 this.renderExercise();
@@ -612,11 +639,13 @@ Replace each answer position in the German text with placeholders {{1}}, {{2}}, 
   "title": "...",
   "text": "German passage with {{1}} placeholders",
   "translation": "Complete Ukrainian translation with all answers filled in",
+  "wordMap": {"GermanWordExactlyAsWritten": "Ukrainian translation for every distinct word in the passage"},
+  "genderMap": {"GermanNounExactlyAsWritten": "der|die|das|plural"},
   "blanks": [
-    {"id": 1, "word": "exact base form from target list", "answer": "correct form to put in text", "translation": "Ukrainian meaning"}
+    {"id": 1, "word": "exact base form from target list", "answer": "correct form to put in text", "translation": "Ukrainian meaning", "gender": "der, die, das, plural, or empty string if the answer is not a noun"}
   ]
 }
-Do not include an options field. The interface will show the same dropdown word bank in every blank, containing all correct missing word forms from this passage. Do not repeat a target word, do not make answer forms identical, and ensure each answer is compatible with the sentence grammar and meaning.
+Provide a Ukrainian translation in wordMap for every distinct word in the German passage, including articles and common words. Map every noun form exactly as it appears in the passage in genderMap using der, die, das, or plural. For each blank, set gender to one of der, die, das, plural when the answer is a noun, and to an empty string otherwise. Do not include an options field. The interface will show the same dropdown word bank in every blank, containing all correct missing word forms from this passage. Do not repeat a target word, do not make answer forms identical, and ensure each answer is compatible with the sentence grammar and meaning.
 `;
         try {
           const result = await this.requestGeminiJson(prompt);
@@ -628,7 +657,8 @@ Do not include an options field. The interface will show the same dropdown word 
             ...blank,
             id: Number(blank.id) || index + 1,
             word: String(blank.word || "").trim(),
-            answer: String(blank.answer || "").trim()
+            answer: String(blank.answer || "").trim(),
+            gender: String(blank.gender || "").trim().toLowerCase()
           }));
           const placeholderMatches = result.text.match(/\{\{\d+\}\}/g) || [];
           if (placeholderMatches.length !== blankCount) throw new Error("У тексті кількість маркерів пропусків не збігається з кількістю відповідей.");
@@ -653,6 +683,8 @@ Do not include an options field. The interface will show the same dropdown word 
             title: String(result.title || "Текст із пропусками"),
             text: result.text,
             translation: String(result.translation || ""),
+            wordMap: result.wordMap && typeof result.wordMap === "object" ? result.wordMap : {},
+            genderMap: result.genderMap && typeof result.genderMap === "object" ? result.genderMap : {},
             blanks
           }];
           this.currentIndex = 0;
@@ -670,16 +702,66 @@ Do not include an options field. The interface will show the same dropdown word 
         const container = document.getElementById("exercise-container");
         container.className = "glass-panel p-5 md:p-10 rounded-2xl md:rounded-3xl shadow-xl w-full relative flex flex-col items-stretch";
         const options = [...new Set(ex.blanks.map((blank) => String(blank.answer)))].sort(() => Math.random() - 0.5);
-        const textHtml = this.escapeHtml(ex.text).replace(/\{\{(\d+)\}\}/g, (_, id) => {
-          const blank = ex.blanks.find((item) => Number(item.id) === Number(id));
-          if (!blank) return "________";
-          const selectOptions = options.map((option) => `<option value="${this.escapeHtml(option)}">${this.escapeHtml(option)}</option>`).join("");
-          return `<select data-blank-id="${Number(id)}" aria-label="Пропуск ${Number(id)}" class="reading-blank inline-block align-baseline max-w-full my-1 mx-1 px-2 py-1 rounded-xl border-2 border-purple-300 bg-white text-indigo-800 font-extrabold text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-purple-300"><option value="">— вибрати слово —</option>${selectOptions}</select>`;
-        });
+        const wordMap = new Map(Object.entries(ex.wordMap || {}).map(([key, value]) => [this.normalizeWord(key), String(value || "Переклад відсутній")]));
+        const genderMap = new Map(Object.entries(ex.genderMap || {}).map(([key, value]) => [this.normalizeWord(key), String(value || "").toLowerCase()]));
+        const parts = String(ex.text || "").split(/(\{\{\d+\}\}|[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*)/gu).filter(Boolean);
+        const wordParts = parts.map((part, index) => ({ part, index, isWord: /^[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*$/u.test(part) }));
+        const articleWords = new Set(["der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einem", "einer", "eines"]);
+        const genderColor = (gender) => ({
+          der: "text-blue-600 hover:text-blue-400",
+          die: "text-red-600 hover:text-red-400",
+          das: "text-green-600 hover:text-green-400",
+          plural: "text-orange-500 hover:text-orange-400"
+        }[gender] || "text-indigo-900 hover:text-purple-700");
+        const articleGender = (wordIndex, word) => {
+          let wordsAhead = 0;
+          for (let i = wordIndex + 1; i < wordParts.length && wordsAhead < 4; i++) {
+            const nextPart = wordParts[i].part;
+            const placeholder = nextPart.match(/^\{\{(\d+)\}\}$/);
+            if (placeholder) {
+              const blank = ex.blanks.find((item) => Number(item.id) === Number(placeholder[1]));
+              const blankGender = blank?.gender || genderMap.get(this.normalizeWord(blank?.word || ""));
+              if (["der", "die", "das", "plural"].includes(blankGender)) return blankGender;
+              continue;
+            }
+            if (!wordParts[i].isWord) continue;
+            wordsAhead++;
+            const mappedGender = genderMap.get(this.normalizeWord(nextPart));
+            if (["der", "die", "das", "plural"].includes(mappedGender)) return mappedGender;
+          }
+          const form = this.normalizeWord(word);
+          if (form === "das" || form === "eines") return "das";
+          if (form === "die" || form === "eine" || form === "einer") return "die";
+          if (form === "den" || form === "dem" || form === "des" || form === "der" || form === "ein" || form === "einen" || form === "einem") return "der";
+          return "";
+        };
+        const textHtml = parts.map((part, index) => {
+          const placeholder = part.match(/^\{\{(\d+)\}\}$/);
+          if (placeholder) {
+            const id = Number(placeholder[1]);
+            const blank = ex.blanks.find((item) => Number(item.id) === id);
+            if (!blank) return "________";
+            const selectOptions = options.map((option) => `<option value="${this.escapeHtml(option)}">${this.escapeHtml(option)}</option>`).join("");
+            return `<select data-blank-id="${id}" aria-label="Пропуск ${id}" class="reading-blank inline-block align-baseline max-w-full my-1 mx-1 px-2 py-1 rounded-xl border-2 border-purple-300 bg-white text-indigo-800 font-extrabold text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-purple-300"><option value="">— вибрати слово —</option>${selectOptions}</select>`;
+          }
+          if (!wordParts[index].isWord) return this.escapeHtml(part);
+          const key = this.normalizeWord(part);
+          const translation = wordMap.get(key) || wordMap.get(key.replace(/[.!?,;:]+$/g, "")) || "Переклад відсутній";
+          let gender = genderMap.get(key) || "";
+          if (!gender && articleWords.has(key)) gender = articleGender(index, part);
+          const colorClass = genderColor(gender);
+          return `<span class="tooltip mx-0.5 transition-colors ${colorClass}" tabindex="0" title="${this.escapeHtml(translation)}">${this.escapeHtml(part)}<span class="tooltiptext">${this.escapeHtml(translation)}</span></span>`;
+        }).join("");
         container.innerHTML = `
           <h3 class="text-2xl md:text-3xl font-extrabold text-indigo-900 mb-3">📖 ${this.escapeHtml(ex.title)}</h3>
-          <p class="text-sm md:text-base text-indigo-500 font-bold mb-5">Обери відповідне слово в кожному пропуску. У списках є слова, які потрібні для всього тексту.</p>
+          <p class="text-sm md:text-base text-indigo-500 font-bold mb-5">Обери відповідне слово в кожному пропуску. Натисни на німецьке слово, щоб побачити переклад.</p>
           <div class="text-base md:text-xl leading-8 md:leading-9 text-indigo-950 whitespace-pre-line text-left">${textHtml}</div>
+          <div class="mt-5 flex flex-wrap gap-2 text-xs md:text-sm font-bold">
+            <span class="rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1">der — чоловічий</span>
+            <span class="rounded-full bg-red-50 border border-red-200 text-red-700 px-3 py-1">die — жіночий</span>
+            <span class="rounded-full bg-green-50 border border-green-200 text-green-700 px-3 py-1">das — середній</span>
+            <span class="rounded-full bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1">Plural — множина</span>
+          </div>
           <div id="reading-feedback" class="hidden mt-6 p-4 rounded-2xl font-bold text-indigo-900 bg-indigo-50 border-2 border-indigo-100"></div>
           <div id="translation-box" class="hidden w-full mt-5 bg-yellow-50 border-2 md:border-4 border-yellow-300 rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm">
             <h4 class="text-base md:text-lg text-yellow-900 font-extrabold mb-2">Український переклад</h4>
@@ -765,17 +847,18 @@ Do not include an options field. The interface will show the same dropdown word 
           return `<span class="tooltip mx-1 transition-colors ${colorClass}" tabindex="0">${w}<span class="tooltiptext">${trans}</span></span>`;
         }).join("");
 
+        const answerOptions = [...ex.options].sort(() => Math.random() - 0.5);
         const html = `
           <p class="text-2xl md:text-4xl font-extrabold mb-3 text-center leading-normal text-indigo-900 drop-shadow-sm">${sentenceHtml}</p>
           
           <p class="text-base md:text-lg font-bold text-indigo-500 text-center mb-8 md:mb-12 px-4">🇺🇦 ${ex.translation}</p>
           
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 w-full max-w-2xl mb-4 md:mb-6">
-            ${ex.options.sort(() => Math.random() - 0.5).map((opt) => `
-              <button onclick="app.checkAnswer(this, '${opt.replace(/'/g, "\\'")}', '${ex.answer.replace(/'/g, "\\'")}', '${ex.word.replace(/'/g, "\\'")}')" 
+            ${answerOptions.map((opt, index) => `
+              <button type="button" data-option-index="${index}"
                 class="bg-white border-2 md:border-4 border-indigo-100 hover:border-purple-400 hover:bg-purple-50 hover:-translate-y-1 p-3 md:p-5 rounded-xl md:rounded-2xl text-indigo-800 text-lg md:text-2xl font-bold transition-all shadow-md"
               >
-                ${opt}
+                ${this.escapeHtml(opt)}
               </button>
             `).join("")}
           </div>
@@ -790,6 +873,12 @@ Do not include an options field. The interface will show the same dropdown word 
         `;
 
         container.innerHTML = html;
+        container.querySelectorAll("[data-option-index]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const selected = answerOptions[Number(button.dataset.optionIndex)];
+            this.checkAnswer(button, selected, ex.answer, ex.word);
+          });
+        });
       },
 
       checkAnswer(btn, selected, correct, targetWord) {
